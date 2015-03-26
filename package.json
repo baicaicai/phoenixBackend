@@ -1,0 +1,17 @@
+{
+  "name": "VerticalStructure",
+  "version": "0.0.1",
+  "dependencies": {
+    "body-parser": "^1.10.0",
+    "cheerio": "^0.19.0",
+    "compression": "^1.2.2",
+    "ejs": "^1.0.0",
+    "express": "~4.10.6",
+    "express-session": "^1.9.3",
+    "method-override": "^2.3.0",
+    "mongoose": "^3.8.21",
+    "morgan": "^1.5.0",
+    "request": "^2.54.0",
+    "underscore": "^1.8.2"
+  }
+}

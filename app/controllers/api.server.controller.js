@@ -8,6 +8,7 @@
 var request = require('request');
 var cheerio = require('cheerio');
 var _ = require('lodash');
+var avServ = require('../services/avcloudServ');
 
 
 //ToDO 将此类机密信息作为常量存储与别处
@@ -26,13 +27,33 @@ var dheaders = {
 	'Referer': 'http://cia.airchina.com.cn/cia/notification.page',
 	'Accept-Encoding': 'gzip, deflate',
 	'Accept-Language': 'zh-CN,zh;q=0.8',
-	'Cookie': ''};
+	'Cookie': ''
+};
 var userID = '0000058908';
 var passWord = '0503';
-var flightKey = ["DutyDate","Day","FlightNum","Sector","PlaneType","Duty","ParingDuty","CrewRank","RPTTime","STDTime","STATime","FLTTime","DutyTime","Hotel","Training","Remarks","Departure","Destination"];
+var flightKey = [
+	"Cid",
+	"Mid",
+	"DutyDate",
+	"Day",
+	"FlightNum",
+	"Sector",
+	"PlaneType",
+	"Duty",
+	"ParingDuty",
+	"CrewRank",
+	"RPTTime",
+	"STDTime",
+	"STATime",
+	"FLTTime",
+	"DutyTime",
+	"Hotel",
+	"Training",
+	"Remarks",
+	"Departure",
+	"Destination"
+];
 
-//声明全局变量，用于存储获取回来的规范化信息
-var htmlBody;
 
 exports.parseCIA = function () {
 
@@ -44,7 +65,7 @@ exports.parseCIA = function () {
 			url: mainPageUrl,
 			form: {
 				userId: userID,
-				password:passWord
+				password: passWord
 			}
 		},
 		function (err, response, body) {
@@ -53,9 +74,9 @@ exports.parseCIA = function () {
 			var c1 = rawCookie[0].split(';')[0];
 			var c2 = rawCookie[1].split(';')[0];
 			cookies = c2.concat(";", c1, ";");
-/*			console.log(typeof(cookies));*/
+			/*			console.log(typeof(cookies));*/
 			dheaders.Cookie = cookies;
-/*			console.log(dheaders);*/
+			/*			console.log(dheaders);*/
 			request.post(
 				{
 					url: contentUrl,
@@ -63,8 +84,7 @@ exports.parseCIA = function () {
 				},
 				function (err, response, body) {
 					console.log('成功获取HTML数据');
-					htmlBody = body;
-					parseRosterReport(htmlBody);
+					parseRosterReport(body);
 				}
 			);
 		}
@@ -73,14 +93,11 @@ exports.parseCIA = function () {
 };
 
 
-
 var parseRosterReport = function (html) {
 	console.log('开始解析HTML页面');
 	
 	//定义数组变量用于记录每一行飞行记录
 	var flightCol = [];
-
-	var flights = {};
 
 
 	//初始化cheerio，将html初始化为类似jquery对象
@@ -94,144 +111,151 @@ var parseRosterReport = function (html) {
 	var lastDate = "01MAR15";
 	var lastDay = "SUN";
 	var lastFlightNum = "na";
-	
-	var dateArray= [];
+
+
+	var dateArray = [];
 
 	//将每个飞行计划初始化进行rawFlights数组以供后续处理	
-	for(i=0;i<rawFlighs.length;i++){
+	for (i = 0; i < rawFlighs.length; i++) {
 
-		 var Departure = "";
-		 var Destination = "";
+		var Uid = userID;
+		var Mid = "";
+		var Departure = "";
+		var Destination = "";
+
+
 		/*	1.使用cheerio的.eq(index)方法遍历每一个飞行记录，
-			2.使用字符串功能 .replace(/\n/g,"|") 将所有换行符替换成"|"
-			3.使用字符串功能 .replace(/\s/g,"-") 将剩余的所有空格替换成"-"
-			4.使用字符串功能 .split('|')将字符串拆分成array
-		*/
-		var flightDetail = rawFlighs.eq(i).text().replace(/\n/g,"|").replace(/\s/g,"-").split('|');
+		 2.使用字符串功能 .replace(/\n/g,"|") 将所有换行符替换成"|"
+		 3.使用字符串功能 .replace(/\s/g,"-") 将剩余的所有空格替换成"-"
+		 4.使用字符串功能 .split('|')将字符串拆分成array
+		 */
+		var flightDetail = rawFlighs.eq(i).text().replace(/\n/g, "|").replace(/\s/g, "-").split('|');
 
 		//使用underscore的.compact函数删除所有空数据
 		/*	使用underscore的_.map功能来遍历从上面获取的数组的每一个元素，并将每一个元素拼装成
-		    JSON字符串，其中有回调功能有三个参数
-		   		elem: 当前元素
-		   		index: 当前元素的序列号
-		   		array: 遍历的元素本身
-		*/
-		var rawFlightArray=_.chain(flightDetail)
-						.compact()
-						.map(function(elem,index,array){
+		 JSON字符串，其中有回调功能有三个参数
+		 elem: 当前元素
+		 index: 当前元素的序列号
+		 array: 遍历的元素本身
+		 */
+		var rawFlightArray = _.chain(flightDetail)
+			.compact()
+			.map(function (elem, index, array) {
+				//使用switch功能来拼装字符串
+				switch (index) {
 
-							//使用switch功能来拼装字符串
-							switch(index){
+					//必填字段，如果为空，则取上一个有值数据 lastDate
+					//本子段的key是: Date
 
-								//必填字段，如果为空，则取上一个有值数据 lastDate
-								//本子段的key是: Date
+					case 0:
+						if (elem == "-") {
+							elem = lastDate;
+							// console.log('更新第' + i + '条记录的日期信息为' + lastDate);
+						}
+						else {
+							lastDate = elem;
+							dateArray.push(elem);
+						}
+						break;
 
-								case 0:
-									if(elem == "-"){
-										elem = lastDate;
-										// console.log('更新第' + i + '条记录的日期信息为' + lastDate);
-									}
-									else{
-										lastDate = elem;
-										dateArray.push(elem);
-									}
-									break;
+					//必填字段，如果为空，则取上一个有值数据 lastDay
+					//本子段的key是：Day
 
-								//必填字段，如果为空，则取上一个有值数据 lastDay
-								//本子段的key是：Day
+					case 1:
+						if (elem == "-") {
+							elem = lastDay;
+							// console.log('更新第' + i + '条记录的星期为' + lastDay);
+						}
+						else {
+							lastDay = elem;
+						}
+						break;
 
-								case 1:
-									if(elem == "-"){
-										elem = lastDay;
-										// console.log('更新第' + i + '条记录的星期为' + lastDay);							
-									}
-									else{
-										lastDay = elem;
-									}			
-									break;
+					//如果为空且任务类型为"FLY"或者"LO"则取上一个有值数据 lastFlightNum
+					//本子段的key是：FlightNum
 
-								//如果为空且任务类型为"FLY"或者"LO"则取上一个有值数据 lastFlightNum
-								//本子段的key是：FlightNum
-								
-								case 2:
-									if(elem == "-" && (array[5]==="FLY"|| array[5] ==="LO")){
-										elem = lastFlightNum;
-										// console.log('更新第' + i + '条记录的航班编号为' + lastFlightNum);							
-									}
-									else{
-										lastFlightNum = elem;
-									}					
-									break;
-								//Key是Sector
-								case 3:
-									var tempSector = elem.split('-');
-									Departure = tempSector[0] || "-";
-									Destination = tempSector[1] || "-";
-									break;
-							}
-							return elem;
-							})
-						.value();
-		rawFlightArray.push(Departure,Destination);
-		flightCol[i] = _.object(flightKey,rawFlightArray);
+					case 2:
+						if (elem == "-" && (array[5] === "FLY" || array[5] === "LO")) {
+							elem = lastFlightNum;
+							// console.log('更新第' + i + '条记录的航班编号为' + lastFlightNum);
+						}
+						else {
+							lastFlightNum = elem;
+						}
+						break;
+					//Key是Sector
+					case 3:
+						var tempSector = elem.split('-');
+						Departure = tempSector[0] || "-";
+						Destination = tempSector[1] || "-";
+						break;
+				}
+				return elem;
+			})
+			.value();
+		Mid = rawFlightArray[0] + rawFlightArray[2] + rawFlightArray[5];
+		rawFlightArray.push(Departure, Destination);
+		rawFlightArray.unshift(Uid,Mid);
+		var flightDetail = _.zipObject(flightKey,rawFlightArray)
+		avServ.updateFlights(flightDetail);
+
 	};
-	console.log(flightCol);
+
 };
 
 
-
 /*
-								//必填字段，如果为空，则取上一个有值数据 lastDate
-								//本子段的key是: Date
+ //必填字段，如果为空，则取上一个有值数据 lastDate
+ //本子段的key是: Date
 
-								case 0:
-									if(elem == "-"){
-										elem = lastDate;
-										// console.log('更新第' + i + '条记录的日期信息为' + lastDate);
-									}
-									else{
-										lastDate = elem;
-									}
-									elem = "{\"Date\":\"" + elem + "\",";
-									break;
+ case 0:
+ if(elem == "-"){
+ elem = lastDate;
+ // console.log('更新第' + i + '条记录的日期信息为' + lastDate);
+ }
+ else{
+ lastDate = elem;
+ }
+ elem = "{\"Date\":\"" + elem + "\",";
+ break;
 
-								//必填字段，如果为空，则取上一个有值数据 lastDay
-								//本子段的key是：Day
+ //必填字段，如果为空，则取上一个有值数据 lastDay
+ //本子段的key是：Day
 
-								case 1:
-									if(elem == "-"){
-										elem = lastDay;
-										// console.log('更新第' + i + '条记录的星期为' + lastDay);							
-									}
-									else{
-										lastDay = elem;
-									}
-									elem = "\"Day\":\"" + elem + "\",";						
-									break;
+ case 1:
+ if(elem == "-"){
+ elem = lastDay;
+ // console.log('更新第' + i + '条记录的星期为' + lastDay);
+ }
+ else{
+ lastDay = elem;
+ }
+ elem = "\"Day\":\"" + elem + "\",";
+ break;
 
-								//如果为空且任务类型为"FLY"或者"LO"则取上一个有值数据 lastFlightNum
-								//本子段的key是：FlightNum
-								
-								case 2:
-									if(elem == "-" && (array[5]==="FLY"|| array[5] ==="LO")){
-										elem = lastFlightNum;
-										// console.log('更新第' + i + '条记录的航班编号为' + lastFlightNum);							
-									}
-									else{
-										lastFlightNum = elem;
-									}
-									elem = "\"FlightNum\":\"" + elem + "\",";						
-									break;
-								//Key是Sector
-								case 3:
-									var tempSector = elem.split('-');
-									Departure = "\"Departure\":\"" + tempSector[0] + "\",";	
-									Destination = "\"Destination\":\"" + tempSector[1] + "\"}";
-									elem = "\"Sector\":\"" + elem + "\",";	
-									break;
+ //如果为空且任务类型为"FLY"或者"LO"则取上一个有值数据 lastFlightNum
+ //本子段的key是：FlightNum
 
-							}
-							return elem;
-							})
-						.value();
-*/
+ case 2:
+ if(elem == "-" && (array[5]==="FLY"|| array[5] ==="LO")){
+ elem = lastFlightNum;
+ // console.log('更新第' + i + '条记录的航班编号为' + lastFlightNum);
+ }
+ else{
+ lastFlightNum = elem;
+ }
+ elem = "\"FlightNum\":\"" + elem + "\",";
+ break;
+ //Key是Sector
+ case 3:
+ var tempSector = elem.split('-');
+ Departure = "\"Departure\":\"" + tempSector[0] + "\",";
+ Destination = "\"Destination\":\"" + tempSector[1] + "\"}";
+ elem = "\"Sector\":\"" + elem + "\",";
+ break;
+
+ }
+ return elem;
+ })
+ .value();
+ */

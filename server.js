@@ -13,6 +13,10 @@ var express = require('./config/express.js');
 var app = express();
 app.listen(3000);
 
+
+/*var avos = require('./config/avoscloud.js')();*/
+
+
 module.exports = app;
 
 //确认express运行成功

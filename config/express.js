@@ -11,6 +11,9 @@ var ejs = require('ejs');
 var session = require('express-session');
 var config = require('./config');
 
+
+
+
 module.exports = function(){
 	//实例化express
 	var app = express();
@@ -44,7 +47,6 @@ module.exports = function(){
 		resave: true,
 		secret: config.sessionSecret
 	}));
-
 
 
 	//读取Server Side 路由模块中进行操作

@@ -2,6 +2,7 @@
   "name": "VerticalStructure",
   "version": "0.0.1",
   "dependencies": {
+    "avoscloud-sdk": "latest",
     "body-parser": "^1.10.0",
     "cheerio": "^0.19.0",
     "compression": "^1.2.2",
@@ -10,9 +11,9 @@
     "express-session": "^1.9.3",
     "lodash": "^3.6.0",
     "method-override": "^2.3.0",
+    "moment": "^2.9.0",
     "morgan": "^1.5.0",
     "request": "^2.54.0",
-    "avoscloud-sdk":"latest",
     "underscore": "^1.8.2"
   }
 }

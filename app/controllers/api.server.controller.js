@@ -123,7 +123,7 @@ var parseRosterReport = function (html) {
 	var lastFlightNum = "na";
 
 
-	var dateArray = [];
+	var rawFlightData = [];
 
 	//将每个飞行计划初始化进行rawFlights数组以供后续处理	
 	for (i = 0; i < rawFlighs.length; i++) {
@@ -140,7 +140,7 @@ var parseRosterReport = function (html) {
 		 4.使用字符串功能 .split('|')将字符串拆分成array
 		 */
 		var flightDetail = rawFlighs.eq(i).text().replace(/\n/g, "|").replace(/\s/g, "-").split('|');
-/*		console.log(flightDetail);*/
+		/*	console.log(flightDetail);*/
 		//使用underscore的.compact函数删除所有空数据
 		/*	使用underscore的_.map功能来遍历从上面获取的数组的每一个元素，并将每一个元素拼装成
 		 JSON字符串，其中有回调功能有三个参数
@@ -165,7 +165,6 @@ var parseRosterReport = function (html) {
 						else {
 							elem = moment(elem).toDate();
 							lastDate = elem;
-							dateArray.push(elem);
 						}
 						break;
 
@@ -210,9 +209,8 @@ var parseRosterReport = function (html) {
 		rawFlightArray.push(Departure, Destination);
 		rawFlightArray.unshift(Uid,Mid);
 		var flightObject = _.zipObject(flightKey,rawFlightArray);
-		console.log(flightObject.DutyDate);
-		avServ.updateFlights(flightObject);
+		rawFlightData.push(flightObject);
 
 	};
-
+	avServ.updateFlights(rawFlightData);
 };

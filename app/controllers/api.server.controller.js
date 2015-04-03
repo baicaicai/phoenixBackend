@@ -49,7 +49,8 @@ var flightKey = [
 	"Training",
 	"Remarks",
 	"Departure",
-	"Destination"
+	"Destination",
+	"isExpired"
 ];
 
 
@@ -120,7 +121,7 @@ var parseRosterReport = function (html) {
 	
 	var lastDate = "01MAR15";
 	var lastDay = "SUN";
-	var lastFlightNum = "na";
+	var lastFlightNum = "-";
 
 
 	var rawFlightData = [];
@@ -133,14 +134,14 @@ var parseRosterReport = function (html) {
 		var Departure = "";
 		var Destination = "";
 
-
 		/*	1.使用cheerio的.eq(index)方法遍历每一个飞行记录，
 		 2.使用字符串功能 .replace(/\n/g,"|") 将所有换行符替换成"|"
 		 3.使用字符串功能 .replace(/\s/g,"-") 将剩余的所有空格替换成"-"
 		 4.使用字符串功能 .split('|')将字符串拆分成array
+		 Todo:这个字符串功能有点问题，以20150410悉尼航班为例
 		 */
 		var flightDetail = rawFlighs.eq(i).text().replace(/\n/g, "|").replace(/\s/g, "-").split('|');
-		/*	console.log(flightDetail);*/
+/*		console.log(flightDetail);*/
 		//使用underscore的.compact函数删除所有空数据
 		/*	使用underscore的_.map功能来遍历从上面获取的数组的每一个元素，并将每一个元素拼装成
 		 JSON字符串，其中有回调功能有三个参数
@@ -149,7 +150,8 @@ var parseRosterReport = function (html) {
 		 array: 遍历的元素本身
 		 */
 		var rawFlightArray = _.chain(flightDetail)
-			.compact()
+			//lodash的slice截取不包含最后一个元素的数组
+			.slice(1, 17)
 			.map(function (elem, index, array) {
 				//使用switch功能来拼装字符串
 				switch (index) {
@@ -185,7 +187,9 @@ var parseRosterReport = function (html) {
 					//本子段的key是：FlightNum
 
 					case 2:
-						if (elem == "-" && (array[5] === "FLY" || array[5] === "LO")) {
+			
+
+						if (elem == "-" || elem == "" && (array[5] === "FLY" || array[5] === "LO")) {
 							elem = lastFlightNum;
 							// console.log('更新第' + i + '条记录的航班编号为' + lastFlightNum);
 						}
@@ -195,6 +199,7 @@ var parseRosterReport = function (html) {
 						break;
 
 					//Key是Sector
+					
 					case 3:
 						var tempSector = elem.split('-');
 						Departure = tempSector[0] || "-";
@@ -206,11 +211,11 @@ var parseRosterReport = function (html) {
 			.value();
 		//初始化"Mid"字段作为任务识别ID	
 		Mid = moment(rawFlightArray[0]).format('YYYYMMDD') + "_" + rawFlightArray[2]+ "_" +rawFlightArray[5];
-		rawFlightArray.push(Departure, Destination);
+		rawFlightArray.push(Departure, Destination,false);
 		rawFlightArray.unshift(Uid,Mid);
 		var flightObject = _.zipObject(flightKey,rawFlightArray);
+		// console.log(flightObject);
 		rawFlightData.push(flightObject);
-
 	};
 	avServ.updateFlights(rawFlightData);
 };

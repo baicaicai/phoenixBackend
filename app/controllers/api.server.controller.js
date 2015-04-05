@@ -24,9 +24,6 @@ var dheaders = {
 	'Content-Type': 'application/x-www-form-urlencoded',
 	'DNT': '1',
 	'Cookie': ''};
-
-
-
 var userID = '0000058908';
 var passWord = '0503';
 var flightKey = [

@@ -47,6 +47,7 @@ var flightKey = [
 	"Remarks",
 	"Departure",
 	"Destination",
+	"CrewMembers",
 	"isExpired"
 ];
 
@@ -119,14 +120,17 @@ var parseRosterReport = function (html) {
 	var lastDate = "01MAR15";
 	var lastDay = "SUN";
 	var lastFlightNum = "-";
-
-
 	var rawFlightData = [];
 
 	//将每个飞行计划初始化进行rawFlights数组以供后续处理	
-	for (i = 0; i < rawFlighs.length; i++) {
+	for (var i = 0; i < rawFlighs.length; i++) {
 
 		var Uid = userID;
+		var CrewMembers = {
+			href:'',
+			nums:0,
+			members:[]
+		};
 		var Mid = "";
 		var Departure = "";
 		var Destination = "";
@@ -146,6 +150,7 @@ var parseRosterReport = function (html) {
 		 index: 当前元素的序列号
 		 array: 遍历的元素本身
 		 */
+
 		var rawFlightArray = _.chain(flightDetail)
 			//lodash的slice截取不包含最后一个元素的数组
 			.slice(1, 17)
@@ -207,12 +212,72 @@ var parseRosterReport = function (html) {
 			})
 			.value();
 		//初始化"Mid"字段作为任务识别ID	
-		Mid = moment(rawFlightArray[0]).format('YYYYMMDD') + "_" + rawFlightArray[2]+ "_" +rawFlightArray[5];
-		rawFlightArray.push(Departure, Destination,false);
+		Mid = moment(rawFlightArray[0]).format('YYYYMMDD') + "_" + rawFlightArray[2]+ "_" + rawFlightArray[3] +"_" +rawFlightArray[5];
+		rawFlightArray.push(Departure, Destination,CrewMembers,false);
 		rawFlightArray.unshift(Uid,Mid);
 		var flightObject = _.zipObject(flightKey,rawFlightArray);
 		// console.log(flightObject);
 		rawFlightData.push(flightObject);
 	};
+
+	//解析每个飞行任务的组员情况,返回一个数组，里面是各个飞行任务的字段集合，其中包括linked url
+	var missionTeams =  parseFlightMembers(html);
+	_.map(rawFlightData,function(elem,index,array){
+		if(elem.FlightNum){
+			var matchedIndex = _.findIndex(missionTeams, {'dutyDate': elem.dutyDate , 'flightNum':elem.flightNum });
+			elem.CrewMembers.href = missionTeams[matchedIndex].flightHref;
+		}
+	});
 	avServ.updateFlights(rawFlightData);
+};
+
+
+var parseFlightMembers = function(html){
+
+	var $ = cheerio.load(html);
+	var missions = $('#RosterReport').children('.tableRowEven, .tableRowOdd');
+	var missionTeams = [];
+	//遍历roserter report的每一个子元素，将其子元素的第2个子元素中的 “<a>”标签中的链接地址进行存储
+	missions.each(function(i,elem){
+		var href = $(this).children().eq(2).children();
+
+
+		/*本想通过拼出Mid字段作为索引，发觉问题更大
+		var missionMid1= moment($(this).children().eq(0)).format('YYYYMMDD');
+		var missionMid2 = $(this).children().eq(2).text().replace(/\s/g , "-");
+		var missionMid3 = $(this).children().eq(3).text().replace(/\s/g , "-");
+		var missionMid4 = $(this).children().eq(5).text();
+		var missionMid = missionMid1 + "_" + missionMid2 + "_" + missionMid3 + "_" + missionMid4;
+		*/
+
+		var flightNum = href.text().replace(/\s/g,"-");
+		var dutyDate  = moment($(this).children().eq(0)).format('YYYYMMDD');
+		var flightHref ="http://" + href.attr('href');
+		var missionTeam = {};
+		if(flightNum){
+			missionTeam.dutyDate = dutyDate;
+			missionTeam.flightNum = flightNum;
+			missionTeam.flightHref = flightHref;
+			missionTeams.push(missionTeam);
+		}
+	});
+	return  missionTeams;
+	console.log(missionTeams);
+
+/*
+	_.map(missionTeams,function(elem,index,array){
+			request.get({
+					url: elem.missionHref,
+					headers: dheaders
+			},function(err,response,body){
+					var $ = cheerio.load(body);
+					var rawTeams = $('#sectorItem').children('.tableRowEven, .tableRowOdd');
+
+
+				}
+
+			)
+	});*/
+
+
 };

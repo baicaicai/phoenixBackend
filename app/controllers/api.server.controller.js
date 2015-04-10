@@ -3,14 +3,11 @@
  * function:解析CIA任务报告网页，获取任务信息
  */
 
-
-
 var request = require('request');
 var cheerio = require('cheerio');
 var _ = require('lodash');
 var moment = require('moment');
 var avServ = require('../services/avcloudServ');
-
 
 //ToDO 将此类机密信息作为常量存储与别处
 var mainPageUrl = 'http://cia.airchina.com.cn/cia/loginHandler.do';
@@ -50,9 +47,6 @@ var flightKey = [
 	"CrewMembers",
 	"isExpired"
 ];
-
-
-
 
 exports.parseCIA = function () {
 
@@ -108,7 +102,6 @@ var parseRosterReport = function (html) {
 	//定义数组变量用于记录每一行飞行记录
 	var flightCol = [];
 
-
 	//初始化cheerio，将html初始化为类似jquery对象
 	var $ = cheerio.load(html);
 
@@ -116,10 +109,11 @@ var parseRosterReport = function (html) {
 	var rawFlighs = $('#RosterReport').children('.tableRowEven, .tableRowOdd');
 	
 	// 定义最近有值得日期，星期及航班号信息，在循环中更新，用来补充原始数据
-	
-	var lastDate = "01MAR15";
-	var lastDay = "SUN";
+	//Todo 如果获取的第一个任务即没有飞行代码，且dutyTyep = "LO"，则此处默认为空会造成BUG,需进行进一步处理
+	var lastDate = moment().subtract(7, 'days').format('DDMMMYY');
+	var lastDay = moment().subtract(7, 'days').format('ddd');
 	var lastFlightNum = "-";
+
 	var rawFlightData = [];
 
 	//将每个飞行计划初始化进行rawFlights数组以供后续处理	
@@ -150,7 +144,6 @@ var parseRosterReport = function (html) {
 		 index: 当前元素的序列号
 		 array: 遍历的元素本身
 		 */
-
 		var rawFlightArray = _.chain(flightDetail)
 			//lodash的slice截取不包含最后一个元素的数组
 			.slice(1, 17)
@@ -220,17 +213,103 @@ var parseRosterReport = function (html) {
 		rawFlightData.push(flightObject);
 	};
 
+	rawFlighs.each(function(i,elem){
+		var Uid = userID;
+		var Mid = "";
+		var Departure = "";
+		var Destination = "";
+
+		var rawHref = $(this).children().eq(2).children();
+		var flightHref ="http://" + rawHref.attr('href');
+		var flightDetail = $(this).text().replace(/\n/g, "|").replace(/\s/g, "-").split('|');
+		var rawFlightArray = _.chain(flightDetail)
+			//lodash的slice截取不包含最后一个元素的数组
+			.slice(1, 17)
+			.map(function (elem, index, array) {
+				//使用switch功能来拼装字符串
+				switch (index) {
+
+					//必填字段，如果为空，则取上一个有值数据 lastDate
+					//本子段的key是: Date
+
+					case 0:
+						if (elem == "-") {
+							elem = lastDate;
+							// console.log('更新第' + i + '条记录的日期信息为' + lastDate);
+						}
+						else {
+							elem = moment(elem).toDate();
+							lastDate = elem;
+						}
+						break;
+
+					//必填字段，如果为空，则取上一个有值数据 lastDay
+					//本子段的key是：Day
+
+					case 1:
+						if (elem == "-") {
+							elem = lastDay;
+							// console.log('更新第' + i + '条记录的星期为' + lastDay);
+						}
+						else {
+							lastDay = elem;
+						}
+						break;
+
+					//如果为空且任务类型为"FLY"或者"LO"则取上一个有值数据 lastFlightNum
+					//本子段的key是：FlightNum
+
+					case 2:
+
+
+						if (elem == "-" || elem == "" && (array[5] === "FLY" || array[5] === "LO")) {
+							elem = lastFlightNum;
+							// console.log('更新第' + i + '条记录的航班编号为' + lastFlightNum);
+						}
+						else {
+							lastFlightNum = elem;
+						}
+						break;
+
+					//Key是Sector
+
+					case 3:
+						var tempSector = elem.split('-');
+						Departure = tempSector[0] || "-";
+						Destination = tempSector[1] || "-";
+						break;
+				}
+				return elem;
+			})
+			.value();
+
+		Mid = moment(rawFlightArray[0]).format('YYYYMMDD') + "_" + rawFlightArray[2]+ "_" + rawFlightArray[3] +"_" +rawFlightArray[5];
+		rawFlightArray.push(Departure, Destination,flightHref,false);
+		rawFlightArray.unshift(Uid,Mid);
+		var flightObject = _.zipObject(flightKey,rawFlightArray);
+		console.log(flightObject);
+
+	});
+
 	//解析每个飞行任务的组员情况,返回一个数组，里面是各个飞行任务的字段集合，其中包括linked url
 	var missionTeams =  parseFlightMembers(html);
 	_.map(rawFlightData,function(elem,index,array){
-		if(elem.FlightNum){
-			var matchedIndex = _.findIndex(missionTeams, {'dutyDate': elem.dutyDate , 'flightNum':elem.flightNum });
-			elem.CrewMembers.href = missionTeams[matchedIndex].flightHref;
+		//如果任务没有飞行代码，则认为其同样没有crewMember字段
+		if(elem.FlightNum!="-"){
+			var matchedIndex = _.findIndex(missionTeams, {'flightNum':elem.FlightNum });
+
+			//如果找到了相应的索引信息，则将href信息填入相应飞行对象
+			if(matchedIndex>=0){
+				elem.CrewMembers.href = missionTeams[matchedIndex].flightHref;
+			}
+			else{
+				console.log('无法找到MID为' + elem.Mid + ' 任务的crewMember信息，需进一步处理');
+			}
+
 		}
 	});
 	avServ.updateFlights(rawFlightData);
 };
-
 
 var parseFlightMembers = function(html){
 
@@ -238,10 +317,10 @@ var parseFlightMembers = function(html){
 	var missions = $('#RosterReport').children('.tableRowEven, .tableRowOdd');
 	var missionTeams = [];
 	//遍历roserter report的每一个子元素，将其子元素的第2个子元素中的 “<a>”标签中的链接地址进行存储
+	var lastDate = moment(moment().subtract(7, 'days').format('DDMMMYYYY')).toDate();
+
 	missions.each(function(i,elem){
 		var href = $(this).children().eq(2).children();
-
-
 		/*本想通过拼出Mid字段作为索引，发觉问题更大
 		var missionMid1= moment($(this).children().eq(0)).format('YYYYMMDD');
 		var missionMid2 = $(this).children().eq(2).text().replace(/\s/g , "-");
@@ -251,7 +330,16 @@ var parseFlightMembers = function(html){
 		*/
 
 		var flightNum = href.text().replace(/\s/g,"-");
-		var dutyDate  = moment($(this).children().eq(0)).format('YYYYMMDD');
+		var dutyDate =$(this).children().eq(0).text().replace(/\s/g,'');
+
+		if(!dutyDate){
+			dutyDate =lastDate;
+		}
+		else{
+			dutyDate  = moment(dutyDate).toDate();
+			lastDate = dutyDate;
+		}
+
 		var flightHref ="http://" + href.attr('href');
 		var missionTeam = {};
 		if(flightNum){
@@ -262,22 +350,4 @@ var parseFlightMembers = function(html){
 		}
 	});
 	return  missionTeams;
-	console.log(missionTeams);
-
-/*
-	_.map(missionTeams,function(elem,index,array){
-			request.get({
-					url: elem.missionHref,
-					headers: dheaders
-			},function(err,response,body){
-					var $ = cheerio.load(body);
-					var rawTeams = $('#sectorItem').children('.tableRowEven, .tableRowOdd');
-
-
-				}
-
-			)
-	});*/
-
-
 };

@@ -16,13 +16,17 @@ var moment = require('moment');
 var Flight = AV.Object.extend('Flight');
 
 
-exports.updateFlights = function(rawData){
+exports.checkUpdate = function(rawData){
 
 	//初始化查询时间
 	var startTime =moment().subtract(8, 'days').toDate();
-	
+	//初始化过程使用字段
 	var dateArray = [];
 	var midArray = [];
+
+	//初始化处理结果
+	var existFlights = [];
+	var newFlights = [];
 
 	//初始化AVcloud链接
 	AV.initialize(config.avoscloudAppID, config.avoscloudAppKey);
@@ -45,6 +49,7 @@ exports.updateFlights = function(rawData){
 
 				//如果找得到又一样的MID的话，则认为无需更新
 				if(_.includes(midArray,elem.Mid)){
+					existFlights.push(elem);
 					console.log('MID为 ' + elem.Mid + ' 的数据已经存在，无需更新！');
 				}
 				//如果没找到相应的MID的话，则需要进行进一步判断
@@ -70,7 +75,7 @@ exports.updateFlights = function(rawData){
 					}
 					
 					//不论是否将结果作废，都需要将数据插入数据库
-					updateFlight(elem);
+					newFlights.push(elem);
 				}
 			})
 		},
@@ -87,10 +92,10 @@ exports.updateFlights = function(rawData){
 	});
 
 	*/
-
+	return newFlights;
 };
 
-var updateFlight = function(mission){
+exports.updateFlight = function(newFlights){
 
 	//实例化‘Flight’document
 	var flight = new Flight();
@@ -101,7 +106,6 @@ var updateFlight = function(mission){
 			flight.set(key, elem);
 		}
 	);
-
 	flight.save().then(function(result){
 		console.log('已经成本将'+ result.Mid +'的飞行任务进行了存储');
 	},function(result,error){
